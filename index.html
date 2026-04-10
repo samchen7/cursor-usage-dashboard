@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cursor Usage Dashboard</title>
+<style>
+:root{
+  --bg:#090d12;
+  --surf:rgba(13,19,28,0.98);
+  --border:rgba(100,132,172,0.13);
+  --text:#e6f0fc;
+  --muted:#6e8aaa;
+  --dim:#3d5169;
+  --accent:#3db8e8;
+  --green:#4ecb87;
+  --amber:#f5a623;
+  --rose:#e8608a;
+  --purple:#a07cf6;
+  --grid-line:rgba(100,132,172,0.07);
+  --shadow:0 6px 28px rgba(0,0,0,0.45);
+  --r:13px;
+  --h0:rgba(100,132,172,0.05);
+  --h1:rgba(18,62,90,0.75);
+  --h2:rgba(0,116,158,0.78);
+  --h3:rgba(5,162,202,0.82);
+  --h4:rgba(54,186,234,0.88);
+  --h5:#3db8e8;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;background:radial-gradient(ellipse 60% 40% at 12% 0%,rgba(0,58,100,0.22),transparent 60%),radial-gradient(ellipse 50% 45% at 92% 100%,rgba(70,20,120,0.16),transparent 55%),var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px;letter-spacing:.008em;}
+button,input{font:inherit;color:inherit;}
+
+/* ── UPLOAD SCREEN ── */
+.upload-screen{
+  height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.upload-box{
+  text-align:center;
+  padding:48px 56px;
+  border:1px dashed rgba(61,184,232,0.22);
+  border-radius:20px;
+  background:rgba(13,19,28,0.7);
+  max-width:480px;
+  transition:border-color 200ms,background 200ms;
+}
+.upload-box.drag-over{border-color:rgba(61,184,232,0.6);background:rgba(13,19,28,0.9);}
+.upload-icon{font-size:42px;color:var(--accent);margin-bottom:20px;line-height:1;}
+.upload-title{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:10px;}
+.upload-desc{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:28px;}
+.upload-btn-big{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:11px 24px;border-radius:99px;
+  border:1px solid rgba(61,184,232,0.35);
+  background:rgba(61,184,232,0.1);
+  color:var(--text);cursor:pointer;font-size:13px;font-weight:500;
+  transition:140ms;white-space:nowrap;
+}
+.upload-btn-big:hover{background:rgba(61,184,232,0.18);}
+.upload-btn-big input{display:none;}
+.upload-hint{margin-top:16px;font-size:11px;color:var(--dim);}
+.upload-err{margin-top:12px;font-size:11.5px;color:var(--rose);min-height:18px;}
+.upload-pc-only{display:none;}
+@media(max-width:1439px){
+  .upload-pc-only{
+    display:block;margin-bottom:18px;padding:11px 14px;border-radius:14px;text-align:left;
+    border:1px solid rgba(245,166,35,0.38);
+    background:rgba(245,166,35,0.09);
+    box-shadow:0 4px 18px rgba(0,0,0,0.22);
+  }
+  .upload-pc-only strong{
+    display:block;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--amber);
+    text-transform:uppercase;
+  }
+  .upload-pc-only span{
+    display:block;margin-top:6px;font-size:11px;font-weight:400;color:var(--muted);line-height:1.5;
+  }
+}
+
+/* ── DASHBOARD SCREEN ── */
+.dash-screen{height:100vh;overflow:auto;display:flex;flex-direction:column;}
+
+/* ── STICKY HEADER (topbar + KPI for comparison) ── */
+.dash-header{
+  position:sticky;top:0;z-index:50;
+  flex-shrink:0;
+  background:linear-gradient(180deg,rgba(9,13,18,0.98) 0%,rgba(9,13,18,0.94) 88%,transparent 100%);
+  backdrop-filter:saturate(1.2) blur(8px);
+  -webkit-backdrop-filter:saturate(1.2) blur(8px);
+  padding-bottom:2px;
+}
+
+/* ── TOPBAR ── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:10px;padding:9px 12px 0;flex-shrink:0;
+}
+.brand{display:flex;align-items:center;gap:9px;}
+.title{font-size:16px;font-weight:700;letter-spacing:-.02em;white-space:nowrap;}
+.badge{font-size:9px;padding:2px 7px;border-radius:99px;background:rgba(61,184,232,0.1);border:1px solid rgba(61,184,232,0.24);color:var(--accent);letter-spacing:.06em;text-transform:uppercase;font-weight:600;}
+.meta{font-size:10px;color:var(--muted);margin-left:4px;max-width:45vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.controls{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+.chips{display:flex;gap:4px;}
+.chip{font-size:10.5px;padding:4px 9px;border-radius:99px;border:1px solid var(--border);background:rgba(13,19,28,0.8);color:var(--muted);cursor:pointer;transition:140ms;white-space:nowrap;line-height:1;}
+.chip:hover{color:var(--text);border-color:rgba(61,184,232,0.3);}
+.chip.on{background:rgba(61,184,232,0.1);border-color:rgba(61,184,232,0.34);color:var(--text);}
+.date-range{display:none;align-items:center;gap:4px;padding:3px 8px;border-radius:99px;border:1px solid var(--border);background:rgba(13,19,28,0.9);font-size:10.5px;}
+.date-range.show{display:flex;}
+.date-range input{
+  width:132px;
+  min-width:132px;
+  height:24px;
+  padding:0 8px;
+  border-radius:8px;
+  border:1px solid rgba(100,132,172,0.22);
+  background:rgba(8,12,18,0.92);
+  outline:none;
+  font-size:10.5px;
+  color:var(--text);
+  cursor:pointer;
+  appearance:auto;
+  -webkit-appearance:auto;
+}
+.date-range input:focus{border-color:rgba(61,184,232,0.42);box-shadow:0 0 0 2px rgba(61,184,232,0.12);}
+.date-range span{color:var(--dim);}
+.upload-mini{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:10.5px;white-space:nowrap;transition:140ms;}
+.upload-mini:hover{color:var(--text);border-color:rgba(61,184,232,0.28);}
+.upload-mini input{display:none;}
+
+/* ── KPI ── */
+.kpi-row{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:7px;padding:7px 12px 6px;flex-shrink:0;
+}
+.kpi{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:9px 12px;display:flex;flex-direction:column;justify-content:center;gap:3px;overflow:hidden;box-shadow:var(--shadow);}
+.kpi-l{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;}
+.kpi-v{font-size:22px;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kpi-s{font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kpi-highlight .kpi-v{color:var(--amber);}
+
+/* ── DASHBOARD ── */
+.dash{
+  flex:1 1 0;min-height:0;
+  display:grid;
+  grid-template-rows:1.4fr 1fr;
+  gap:7px;padding:7px 12px 9px;
+}
+.row1{display:grid;grid-template-columns:1.85fr 1.15fr;gap:7px;min-height:0;contain:layout;}
+.row2{display:grid;grid-template-columns:1fr 1.05fr 0.92fr 0.92fr;gap:7px;min-height:0;contain:layout;}
+
+/* ── PANEL ── */
+.panel{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.ph{padding:7px 10px 0;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-shrink:0;}
+.pt{font-size:11.5px;font-weight:600;}
+.pn{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pb{flex:1;min-height:0;padding:5px 9px 7px;position:relative;overflow:hidden;}
+.pb svg{width:100%;height:100%;max-height:100%;display:block;overflow:hidden;}
+.panel-cost .pb-cost{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:0 9px 7px;flex-shrink:0;}
+.si{background:rgba(7,12,20,0.5);border:1px solid rgba(100,132,172,0.09);border-radius:8px;padding:4px 7px;}
+.si-l{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.si-v{font-size:11px;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.leg{display:flex;gap:9px;flex-wrap:wrap;padding:0 9px 4px;flex-shrink:0;}
+.li{display:flex;align-items:center;gap:4px;font-size:9.5px;color:var(--muted);}
+.ld{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.emp{display:flex;align-items:center;justify-content:center;height:100%;color:var(--dim);font-size:20px;border:1px dashed rgba(100,132,172,0.09);border-radius:8px;}
+
+/* ── Cost panel (adapted from design system) ── */
+.panel-cost .pb-cost{
+  padding:10px 12px 12px;display:flex;flex-direction:column;gap:12px;
+  min-height:0;overflow-y:auto;overflow-x:hidden;
+}
+.cost-rail{
+  font-size:9.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+}
+.cost-lead{
+  margin:0;font-size:11px;line-height:1.5;color:var(--muted);
+}
+.cost-rate-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+}
+.cost-tile{
+  border-radius:16px;padding:11px 12px 10px;
+  background:linear-gradient(152deg,rgba(22,30,42,0.96),rgba(10,14,20,0.98));
+  border:1px solid rgba(100,132,172,0.14);
+  box-shadow:
+    5px 5px 18px rgba(0,0,0,0.38),
+    -3px -3px 10px rgba(255,255,255,0.03),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.cost-tile-label{
+  display:block;font-size:9px;font-weight:600;color:var(--dim);
+  letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px;
+}
+.cost-tile-val{
+  display:block;font-size:22px;font-weight:700;letter-spacing:-0.03em;
+  font-variant-numeric:tabular-nums;line-height:1.1;
+}
+.cost-tile-unit{font-size:10px;color:var(--muted);margin-top:3px;display:block;}
+.cost-tile--std .cost-tile-val{color:var(--green);}
+.cost-tile--prem .cost-tile-val{color:var(--rose);}
+.cost-meta{
+  font-size:10px;line-height:1.45;color:var(--dim);
+}
+.cost-sep{
+  height:1px;margin:2px 0;
+  background:linear-gradient(90deg,transparent,rgba(100,132,172,0.22),transparent);
+}
+.cost-hero{
+  text-align:center;padding:14px 12px;border-radius:20px;
+  background:
+    radial-gradient(ellipse 90% 120% at 50% -20%,rgba(61,184,232,0.12),transparent 55%),
+    rgba(7,12,18,0.65);
+  border:1px solid rgba(61,184,232,0.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.cost-hero-label{
+  font-size:10px;font-weight:600;color:var(--muted);
+  letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;
+}
+.cost-hero-num{
+  font-size:clamp(22px,4.2vw,30px);font-weight:700;
+  color:var(--accent);letter-spacing:-0.03em;font-variant-numeric:tabular-nums;
+}
+.cost-compare{display:flex;flex-direction:column;gap:10px;}
+.cost-row{display:flex;align-items:center;gap:10px;min-width:0;}
+.cost-row-l{
+  flex:0 0 92px;font-size:10px;color:var(--muted);line-height:1.25;
+}
+.cost-row-track{
+  flex:1;min-width:0;height:9px;border-radius:99px;
+  background:rgba(100,132,172,0.11);
+  box-shadow:inset 2px 2px 6px rgba(0,0,0,0.25);
+  overflow:hidden;
+}
+.cost-row-fill{height:100%;border-radius:99px;transition:width 0.2s ease;}
+.cost-row-fill--act{background:linear-gradient(90deg,var(--amber),#d4941f);}
+.cost-row-fill--plan{background:linear-gradient(90deg,var(--accent),#2a9ec9);}
+.cost-row-v{
+  flex:0 0 auto;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;
+  color:var(--text);min-width:4.5em;text-align:right;
+}
+.cost-empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;min-height:120px;padding:16px;text-align:center;
+  color:var(--muted);font-size:12px;
+}
+@media(max-width:520px){
+  .cost-rate-grid{grid-template-columns:1fr;}
+  .cost-row-l{flex-basis:76px;font-size:9.5px;}
+}
+
+/* ── TOOLTIP ── */
+.tip{position:fixed;z-index:200;pointer-events:none;padding:6px 9px;background:rgba(7,12,20,0.97);border:1px solid rgba(61,184,232,0.18);border-radius:9px;box-shadow:0 10px 26px rgba(0,0,0,0.5);font-size:11px;line-height:1.55;color:var(--text);max-width:220px;opacity:0;transition:opacity 80ms,transform 80ms;transform:translateY(3px);}
+.tip.on{opacity:1;transform:translateY(0);}
+.tip .d{color:var(--muted);}
+
+/* ── DRAG OVERLAY ── */
+.dov{display:none;position:fixed;inset:0;background:rgba(9,13,18,0.88);border:3px dashed rgba(61,184,232,0.38);z-index:300;align-items:center;justify-content:center;font-size:18px;color:var(--accent);}
+.dov.on{display:flex;}
+.hidden{display:none!important;}
+
+/* ── RESPONSIVE ── */
+@media(max-width:1280px){
+  .row1{grid-template-columns:1fr;}
+  .row2{grid-template-columns:1fr 1fr;}
+  .dash-screen{overflow:auto;height:auto;min-height:100vh;}
+  .dash{grid-template-rows:auto auto;flex:none;}
+  .row1 .panel{min-height:320px;}
+  .row2 .panel{min-height:260px;}
+}
+@media(max-width:900px){
+  .kpi-row{grid-template-columns:repeat(2,1fr);}
+  .row1,.row2{grid-template-columns:1fr;}
+  .row2>*{grid-column:auto;}
+  .chips{flex-wrap:wrap;}
+  .row2 .panel{min-height:220px;}
+}
+@media(max-width:600px){
+  .chips{display:none;}
+}
+
+/* ── Model donut + day modal ── */
+.panel-model .pb-model{padding:4px 8px 6px;display:flex;align-items:center;justify-content:center;min-height:200px;}
+.panel-model .pb-model svg{max-height:220px;}
+.model-legend{display:flex;flex-wrap:wrap;gap:6px 10px;padding:0 9px 6px;justify-content:center;max-height:72px;overflow-y:auto;}
+.model-legend .li{max-width:100%;}
+.model-legend .li span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:min(200px,38vw);}
+
+.day-modal{position:fixed;inset:0;z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(5,8,12,0.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+.day-modal.hidden{display:none!important;}
+.day-modal-card{width:min(520px,100%);max-height:min(72vh,560px);background:var(--surf);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;}
+.day-modal-h{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.day-modal-h strong{font-size:14px;}
+.day-modal-close{
+  flex-shrink:0;width:30px;height:30px;border-radius:10px;border:1px solid var(--border);background:rgba(8,12,18,0.6);color:var(--muted);cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;
+}
+.day-modal-close:hover{color:var(--text);border-color:rgba(61,184,232,0.35);}
+.day-modal-body{padding:10px 12px 12px;overflow:auto;flex:1;min-height:0;}
+.day-modal-table{width:100%;border-collapse:collapse;font-size:11px;}
+.day-modal-table th,.day-modal-table td{padding:6px 8px;text-align:left;border-bottom:1px solid rgba(100,132,172,0.1);}
+.day-modal-table th{color:var(--dim);font-weight:600;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;}
+.day-modal-table td{color:var(--text);}
+.day-modal-table .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);}
+.cal-cell{cursor:pointer;}
+.cal-cell:focus{outline:2px solid rgba(61,184,232,0.5);outline-offset:1px;}
+</style>
+</head>
+<body>
+<div class="dov" id="dov">Drop CSV here</div>
+<div class="tip" id="tip"></div>
+<div class="day-modal hidden" id="dayModal" role="dialog" aria-modal="true" aria-labelledby="dayModalTitle">
+  <div class="day-modal-card">
+    <div class="day-modal-h">
+      <strong id="dayModalTitle">—</strong>
+      <button type="button" class="day-modal-close" id="dayModalClose" aria-label="Close">×</button>
+    </div>
+    <div class="day-modal-body" id="dayModalBody"></div>
+  </div>
+</div>
+
+<!-- ═══ UPLOAD SCREEN ═══ -->
+<div class="upload-screen" id="uploadScreen">
+  <div class="upload-box" id="uploadBox">
+    <div class="upload-pc-only" aria-live="polite">
+      <strong>PC only</strong>
+      <span>This dashboard is laid out for desktop. For the intended experience, use a window at least 1440px wide.</span>
+    </div>
+    <div class="upload-icon">◈</div>
+    <div class="upload-title">Cursor Usage Dashboard</div>
+    <div class="upload-desc">Analyze your Cursor usage patterns and cost structure<br>All data is processed locally in your browser</div>
+    <label class="upload-btn-big">
+      ↑ Select CSV File
+      <input type="file" id="fi" accept=".csv">
+    </label>
+    <div class="upload-hint">Or drag and drop a CSV file here</div>
+    <div class="upload-err" id="uploadErr"></div>
+  </div>
+</div>
+
+<!-- ═══ DASHBOARD SCREEN ═══ -->
+<div class="dash-screen hidden" id="dashScreen">
+  <div class="dash-header">
+    <div class="topbar">
+      <div class="brand">
+        <div class="title">Cursor Usage Dashboard <span class="badge">Analytics</span></div>
+        <div class="meta" id="meta"></div>
+      </div>
+      <div class="controls">
+        <div class="chips" id="chips"></div>
+        <div class="date-range" id="drange">
+          <input type="date" id="ds"><span>—</span><input type="date" id="de">
+        </div>
+        <label class="upload-mini">↑ Change File<input type="file" id="fi2" accept=".csv"></label>
+      </div>
+    </div>
+    <!-- KPI -->
+    <div class="kpi-row" id="kpiRow"></div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="dash">
+    <div class="row1">
+      <!-- Activity Calendar -->
+      <div class="panel">
+        <div class="ph"><span class="pt">Activity Calendar</span><span class="pn" id="calRange">—</span></div>
+        <div class="pb" id="cal"></div>
+        <div class="stats" id="calStats"></div>
+      </div>
+      <!-- Token Trend -->
+      <div class="panel">
+        <div class="ph"><span class="pt">Token Trend</span><span class="pn" id="trendGran">—</span></div>
+        <div class="leg" id="trendLeg"></div>
+        <div class="pb" id="trend"></div>
+      </div>
+    </div>
+
+    <div class="row2">
+      <!-- Hour Heatmap -->
+      <div class="panel">
+        <div class="ph"><span class="pt">Hourly Heatmap</span><span class="pn">Hour × Weekday</span></div>
+        <div class="pb" id="hmap"></div>
+      </div>
+      <!-- Included vs Overage trend -->
+      <div class="panel">
+        <div class="ph"><span class="pt">Included vs Overage</span><span class="pn" id="iovNote">—</span></div>
+        <div class="leg" id="iovLeg"></div>
+        <div class="pb" id="iov"></div>
+      </div>
+      <!-- Model breakdown -->
+      <div class="panel panel-model">
+        <div class="ph"><span class="pt">Model Breakdown</span><span class="pn" id="modelBreakNote">By total tokens</span></div>
+        <div class="pb pb-model" id="modelDonut"></div>
+        <div class="model-legend" id="modelLeg"></div>
+      </div>
+      <!-- Cost breakdown -->
+      <div class="panel panel-cost">
+        <div class="ph"><span class="pt">Cost Estimate</span><span class="pn">Infer unit price from On-Demand · No-plan equivalent</span></div>
+        <div class="pb pb-cost" id="costBreak"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════
+const RANGES=[['7d','7D'],['30d','30D'],['3m','3M'],['6m','6M'],['1y','1Y'],['all','All'],['custom','Custom']];
+const WD=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const PREMIUM=/gpt-?4|gpt-?5|o1|o3|claude-3-(opus|sonnet-3)|gemini-1\.5-pro|gemini-2|max/i;
+
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+const S={all:[],name:'',mode:'3m',cs:'',ce:''};
+
+// ═══════════════════════════════════════
+//  DOM
+// ═══════════════════════════════════════
+const $=id=>document.getElementById(id);
+const E={
+  tip:$('tip'),dov:$('dov'),
+  uploadScreen:$('uploadScreen'),uploadBox:$('uploadBox'),uploadErr:$('uploadErr'),
+  dashScreen:$('dashScreen'),
+  meta:$('meta'),chips:$('chips'),drange:$('drange'),ds:$('ds'),de:$('de'),
+  fi:$('fi'),fi2:$('fi2'),
+  kpi:$('kpiRow'),
+  cal:$('cal'),calStats:$('calStats'),calRange:$('calRange'),
+  trend:$('trend'),trendLeg:$('trendLeg'),trendGran:$('trendGran'),
+  hmap:$('hmap'),
+  iov:$('iov'),iovNote:$('iovNote'),iovLeg:$('iovLeg'),
+  modelDonut:$('modelDonut'),modelLeg:$('modelLeg'),modelBreakNote:$('modelBreakNote'),
+  costBreak:$('costBreak'),
+  dayModal:$('dayModal'),dayModalTitle:$('dayModalTitle'),dayModalBody:$('dayModalBody'),dayModalClose:$('dayModalClose'),
+};
+
+// ═══════════════════════════════════════
+//  TOOLTIP
+// ═══════════════════════════════════════
+function showTip(h,ev){E.tip.innerHTML=h;E.tip.classList.add('on');moveTip(ev);}
+function moveTip(ev){
+  const pad=10,r=E.tip.getBoundingClientRect();
+  let x=ev.clientX+13,y=ev.clientY+15;
+  if(x+r.width>window.innerWidth-pad)x=ev.clientX-r.width-9;
+  if(y+r.height>window.innerHeight-pad)y=ev.clientY-r.height-9;
+  E.tip.style.cssText=`left:${Math.max(pad,x)}px;top:${Math.max(pad,y)}px;`;
+}
+function hideTip(){E.tip.classList.remove('on');}
+function bindTips(el){
+  el.querySelectorAll('[data-t]').forEach(n=>{
+    n.onmouseenter=ev=>showTip(n.dataset.t,ev);
+    n.onmousemove=moveTip;
+    n.onmouseleave=hideTip;
+  });
+}
+
+// ═══════════════════════════════════════
+//  FORMATTERS
+// ═══════════════════════════════════════
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fN(n){return new Intl.NumberFormat('en-US').format(Math.round(n));}
+function fT(n){const a=Math.abs(n);if(a>=1e9)return(n/1e9).toFixed(1)+'B';if(a>=1e6)return(n/1e6).toFixed(a>=1e7?0:1)+'M';if(a>=1e3)return(n/1e3).toFixed(a>=1e4?0:1)+'K';return fN(n);}
+function f$(n){const a=Math.abs(n);return(n<0?'-':'')+'$'+a.toFixed(2);}
+function fP(n){return n.toFixed(1)+'%';}
+
+// ═══════════════════════════════════════
+//  DATE UTILS
+// ═══════════════════════════════════════
+function sod(d){const r=new Date(d);r.setHours(0,0,0,0);return r;}
+function addD(d,n){const r=new Date(d);r.setDate(r.getDate()+n);r.setHours(0,0,0,0);return r;}
+/** Local calendar day (avoid UTC date shift from toISOString). */
+function dk(d){
+  const x=d instanceof Date?d:new Date(d);
+  const y=x.getFullYear(),m=String(x.getMonth()+1).padStart(2,'0'),day=String(x.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function pdk(k){const p=k.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]);}
+/** Earliest day with non-zero tokens in CSV. */
+function firstActivityDay(evs){
+  for(const e of evs){if(!isErr(e.kind)&&e.tot>0)return sod(e.date);}
+  for(const e of evs){if(e.tot>0)return sod(e.date);}
+  return sod(evs[0].date);
+}
+function wsun(d){const r=sod(d);const w=(r.getDay()+6)%7;r.setDate(r.getDate()-w);return r;}
+function sum(arr,fn){return arr.reduce((s,x)=>s+(fn(x)||0),0);}
+
+// ═══════════════════════════════════════
+//  CSV PARSER
+// ═══════════════════════════════════════
+function parseCSV(txt){
+  const rows=[];let row=[],val='',inQ=false;
+  const t=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  for(let i=0;i<t.length;i++){
+    const c=t[i],n=t[i+1];
+    if(c==='"'){if(inQ&&n==='"'){val+='"';i++;}else inQ=!inQ;}
+    else if(c===','&&!inQ){row.push(val);val='';}
+    else if(c==='\n'&&!inQ){row.push(val);rows.push(row);row=[];val='';}
+    else val+=c;
+  }
+  if(val||row.length){row.push(val);rows.push(row);}
+  return rows.filter(r=>r.some(c=>c.trim()));
+}
+function nh(h){return h.toLowerCase().replace(/[^a-z0-9]/g,'');}
+function pNum(v){const s=String(v||'').trim().replace(/[$,]/g,'');if(!s||s==='-'||/^included$/i.test(s))return 0;const n=Number(s);return isFinite(n)?n:0;}
+
+const LS_KEY='cursor-usage-dashboard-v1';
+function serializeEvents(evs){
+  return evs.map(e=>({t:e.date.getTime(),kind:e.kind,model:e.model,inW:e.inW,inWo:e.inWo,cr:e.cr,out:e.out,tot:e.tot,cost:e.cost}));
+}
+function deserializeEvents(arr){
+  const out=[];
+  for(const o of arr){
+    if(!o||typeof o!=='object')continue;
+    const ts=typeof o.t==='number'?o.t:Date.parse(o.date);
+    const d=new Date(ts);
+    if(!isFinite(d.getTime()))continue;
+    out.push({
+      date:d,kind:String(o.kind||'').trim(),
+      model:String(o.model||'').trim()||'auto',
+      inW:+o.inW||0,inWo:+o.inWo||0,cr:+o.cr||0,out:+o.out||0,tot:+o.tot||0,cost:+o.cost||0,
+    });
+  }
+  return out.sort((a,b)=>a.date-b.date);
+}
+function savePersist(){
+  try{
+    if(!S.all.length)return;
+    localStorage.setItem(LS_KEY,JSON.stringify({v:1,name:S.name,events:serializeEvents(S.all)}));
+  }catch(_){/* quota / private mode */}
+}
+function loadPersist(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw)return false;
+    const o=JSON.parse(raw);
+    if(!o||!Array.isArray(o.events)||!o.events.length)return false;
+    const evs=deserializeEvents(o.events);
+    if(!evs.length)return false;
+    S.all=evs;S.name=o.name||'Saved';
+    const bmin=dk(evs[0].date),bmax=dk(evs[evs.length-1].date);
+    S.cs=bmin;S.ce=bmax;
+    E.ds.value=bmin;E.de.value=bmax;
+    E.ds.min=bmin;E.ds.max=bmax;
+    E.de.min=bmin;E.de.max=bmax;
+    return true;
+  }catch(_){return false;}
+}
+
+function parseCursor(txt){
+  const rows=parseCSV(txt);
+  if(!rows.length)throw new Error('CSV is empty');
+  const hdr=rows[0].map(nh);
+  const col=(...ks)=>hdr.findIndex(h=>ks.includes(h));
+  const ix={
+    date:col('date'),kind:col('kind'),model:col('model'),
+    inW:col('inputwcachewrite','inputwithcachewrite'),
+    inWo:col('inputwocachewrite','inputwithoutcachewrite'),
+    cr:col('cacheread'),out:col('outputtokens'),tot:col('totaltokens'),cost:col('cost')
+  };
+  if(ix.date<0||ix.kind<0||ix.tot<0)throw new Error('Missing required fields (Date / Kind / Total Tokens)');
+  const evs=rows.slice(1).map(r=>{
+    const d=new Date(r[ix.date]);if(!isFinite(d.getTime()))return null;
+    return{
+      date:d,kind:String(r[ix.kind]||'').trim(),
+      model:ix.model>=0?String(r[ix.model]||'').trim():'auto',
+      inW:pNum(r[ix.inW]),inWo:pNum(r[ix.inWo]),cr:pNum(r[ix.cr]),
+      out:pNum(r[ix.out]),tot:pNum(r[ix.tot]),cost:pNum(r[ix.cost])
+    };
+  }).filter(Boolean).sort((a,b)=>a.date-b.date);
+  if(!evs.length)throw new Error('No valid records found');
+  return evs;
+}
+
+// ═══════════════════════════════════════
+//  CLASSIFIERS
+// ═══════════════════════════════════════
+const isErr=k=>/error/i.test(k);
+const isInc=k=>/included/i.test(k);
+const isOvg=k=>/on.?demand/i.test(k);
+const isPrem=m=>PREMIUM.test(m);
+
+// ═══════════════════════════════════════
+//  COST INFERENCE
+//  Infer token unit price from on-demand rows, then estimate no-plan total cost.
+// ═══════════════════════════════════════
+function inferRates(events){
+  // Use on-demand rows with real cost.
+  const ovg=events.filter(e=>isOvg(e.kind)&&e.cost>0&&e.tot>0);
+  if(!ovg.length)return{stdRate:0,premRate:0,blended:0,hasData:false};
+
+  const std=ovg.filter(e=>!isPrem(e.model));
+  const prem=ovg.filter(e=>isPrem(e.model));
+
+  const blended=sum(ovg,e=>e.cost)/sum(ovg,e=>e.tot);
+  const stdTok=sum(std,e=>e.tot);
+  const premTok=sum(prem,e=>e.tot);
+  const stdRate=stdTok>0?sum(std,e=>e.cost)/stdTok:blended;
+  const premRate=premTok>0?sum(prem,e=>e.cost)/premTok:blended;
+
+  return{stdRate,premRate,blended,hasData:true,ovgCount:ovg.length};
+}
+
+function estimateNoPlan(events,rates){
+  if(!rates.hasData)return 0;
+  let total=0;
+  for(const e of events){
+    if(isErr(e.kind))continue;
+    total+=e.tot*(isPrem(e.model)?rates.premRate:rates.stdRate);
+  }
+  return total;
+}
+
+// ═══════════════════════════════════════
+//  DATA HELPERS
+// ═══════════════════════════════════════
+function groupDay(evs,min,max){
+  const m=new Map();
+  for(let d=new Date(min);d<=max;d=addD(d,1)){const k=dk(d);m.set(k,{date:new Date(d),tok:0,req:0});}
+  for(const e of evs){const k=dk(e.date);if(!m.has(k))continue;m.get(k).tok+=e.tot;if(!isErr(e.kind))m.get(k).req+=1;}
+  return m;
+}
+
+function bucketize(evs,min,max){
+  const days=Math.round((max-min)/86400000)+1;
+  const mode=days<=45?'day':days<=180?'week':'month';
+  const bm=new Map();
+  for(const e of evs){
+    let key,label,order;
+    if(mode==='day'){key=dk(e.date);label=key.slice(5).replace('-','/');order=+sod(e.date);}
+    else if(mode==='week'){const ws=wsun(e.date);key=dk(ws);label=key.slice(5).replace('-','/');order=+ws;}
+    else{const d=e.date;key=`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}`;label=`M${d.getMonth()+1}`;order=+(new Date(d.getFullYear(),d.getMonth(),1));}
+    if(!bm.has(key))bm.set(key,{key,label,order,tot:0,out:0,inc:0,ovg:0});
+    const b=bm.get(key);b.tot+=e.tot;b.out+=e.out;
+    if(isInc(e.kind))b.inc+=e.tot;if(isOvg(e.kind))b.ovg+=e.tot;
+  }
+  return{mode,bkts:[...bm.values()].sort((a,b)=>a.order-b.order)};
+}
+
+function streaks(dm){
+  const days=[...dm.keys()].sort().filter(k=>dm.get(k).tok>0);
+  if(!days.length)return{lng:0,cur:0,act:0};
+  let lng=1,run=1;
+  for(let i=1;i<days.length;i++){const diff=Math.round((pdk(days[i])-pdk(days[i-1]))/86400000);run=diff===1?run+1:1;if(run>lng)lng=run;}
+  let cur=1;
+  for(let i=days.length-1;i>0;i--){const diff=Math.round((pdk(days[i])-pdk(days[i-1]))/86400000);if(diff===1)cur++;else break;}
+  return{lng,cur,act:days.length};
+}
+
+// ═══════════════════════════════════════
+//  FILTERED STATE
+// ═══════════════════════════════════════
+function filtered(){
+  if(!S.all.length)return{evs:[],min:null,max:null};
+  const dmin=sod(S.all[0].date),dmax=sod(S.all[S.all.length-1].date);
+  let min=dmin,max=dmax;
+  if(S.mode==='custom'&&S.cs&&S.ce){min=pdk(S.cs);max=pdk(S.ce);}
+  else if(S.mode!=='all'){const m={'7d':6,'30d':29,'3m':89,'6m':179,'1y':364};min=addD(dmax,-(m[S.mode]||0));}
+  if(min<dmin)min=dmin;if(max>dmax)max=dmax;
+  return{evs:S.all.filter(e=>{const d=sod(e.date);return d>=min&&d<=max;}),min,max,dmin,dmax};
+}
+
+// ═══════════════════════════════════════
+//  CHIPS
+// ═══════════════════════════════════════
+function renderChips(){
+  E.chips.innerHTML=RANGES.map(([k,l])=>`<button class="chip${S.mode===k?' on':''}" data-k="${k}">${l}</button>`).join('');
+  E.chips.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{S.mode=b.dataset.k;renderChips();renderAll();});
+  E.drange.classList.toggle('show',S.mode==='custom');
+}
+
+// ═══════════════════════════════════════
+//  KPI
+// ═══════════════════════════════════════
+function renderKPI(evs){
+  if(!evs.length){E.kpi.innerHTML=Array(4).fill('<div class="kpi"><div class="kpi-l">—</div><div class="kpi-v">—</div></div>').join('');return;}
+  const valid=evs.filter(e=>!isErr(e.kind));
+  const reqs=valid.length;
+  const totTok=sum(evs,e=>e.tot);
+  const outTok=sum(evs,e=>e.out);
+  const actualCost=sum(evs,e=>e.cost); // Actual pay-as-you-go cost
+  // Infer rate from full dataset to avoid drift in short windows.
+  const rates=inferRates(S.all);
+  const noPlanCost=estimateNoPlan(evs,rates);
+
+  const cards=[
+    {l:'Total Requests',v:fN(reqs),s:`Including errors: ${evs.length} rows`,hi:false},
+    {l:'Total Tokens',v:fT(totTok),s:`Output ${fT(outTok)}`,hi:false},
+    {l:'Actual Overage Cost',v:f$(actualCost),s:`On-Demand charges`,hi:false},
+    {l:'No-Plan Equivalent',v:rates.hasData?f$(noPlanCost):'—',s:rates.hasData?`Inferred unit rate × total tokens`:'No On-Demand data to infer rate',hi:true},
+  ];
+  E.kpi.innerHTML=cards.map(c=>`<div class="kpi${c.hi?' kpi-highlight':''}"><div class="kpi-l">${esc(c.l)}</div><div class="kpi-v">${esc(c.v)}</div><div class="kpi-s">${esc(c.s)}</div></div>`).join('');
+}
+
+// ═══════════════════════════════════════
+//  ACTIVITY HEATMAP
+// ═══════════════════════════════════════
+function renderCal(evs,min,max,dm){
+  const hs=wsun(min),he=addD(wsun(max),6);
+  const gd=[];for(let d=new Date(hs);d<=he;d=addD(d,1))gd.push(new Date(d));
+  const wks=Math.ceil(gd.length/7);
+  const toks=[...dm.values()].map(v=>v.tok);
+  const maxV=Math.max(...toks,1);
+  function hc(v){if(v<=0)return'var(--h0)';const t=v/maxV;if(t<.13)return'var(--h1)';if(t<.33)return'var(--h2)';if(t<.58)return'var(--h3)';if(t<.80)return'var(--h4)';return'var(--h5)';}
+  const rect=E.cal.getBoundingClientRect();
+  const W=Math.max(420,Math.floor(rect.width||E.cal.clientWidth||700));
+  const H=Math.max(170,Math.floor(rect.height||E.cal.clientHeight||170));
+  const ML=26,MT=18,MB=8,MR=4,cg=3;
+  const availW=Math.max(120,W-ML-MR-cg*(wks-1));
+  const availH=Math.max(70,H-MT-MB-cg*6);
+  const cW=Math.max(6,Math.floor(availW/Math.max(wks,1)));
+  const cH=Math.max(8,Math.floor(availH/7));
+  let svg='';
+  [0,2,4,6].forEach(i=>{svg+=`<text x="1" y="${MT+i*(cH+cg)+cH*.75}" fill="var(--muted)" font-size="8.5">${WD[i][0]}</text>`;});
+  let pm=-1;
+  for(let w=0;w<wks;w++){const d=gd[w*7];if(d.getMonth()!==pm){svg+=`<text x="${ML+w*(cW+cg)}" y="10" fill="var(--muted)" font-size="8.5">${d.toLocaleString('en-US',{month:'short'})}</text>`;pm=d.getMonth();}}
+  for(let i=0;i<gd.length;i++){
+    const d=gd[i],w=Math.floor(i/7),dow=(d.getDay()+6)%7;
+    const k=dk(d),entry=dm.get(k),val=entry?.tok||0,req=entry?.req||0;
+    const inR=d>=min&&d<=max,fill=inR?hc(val):'rgba(100,132,172,0.04)';
+    const t=`<strong>${k}</strong><br><span class="d">Tokens: ${fT(val)}<br>Requests: ${req}</span>${inR?'<br><span class="d">Click for breakdown</span>':''}`;
+    const clickAttrs=inR?` class="cal-cell" data-day="${esc(k)}" tabindex="0" role="button"`:'';
+    svg+=`<rect x="${ML+w*(cW+cg)}" y="${MT+dow*(cH+cg)}" width="${cW}" height="${cH}" rx="3" fill="${fill}" data-t="${esc(t)}"${clickAttrs}/>`;
+  }
+  E.cal.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${svg}</svg>`;
+  bindTips(E.cal);
+  E.calRange.textContent=`${dk(min)} — ${dk(max)}`;
+  const st=streaks(dm);
+  const byM=new Map();
+  for(const[k,v]of dm){if(v.tok===0)continue;const mk=k.slice(0,7);byM.set(mk,(byM.get(mk)||0)+v.tok);}
+  const bm=[...byM.entries()].sort((a,b)=>b[1]-a[1])[0]||['—',0];
+  const bd=[...dm.entries()].filter(([,v])=>v.tok>0).sort((a,b)=>b[1].tok-a[1].tok)[0];
+  E.calStats.innerHTML=[
+    ['Top Month',`${bm[0].slice(5).replace('-','/')} · ${fT(bm[1])}`],
+    ['Top Day',bd?`${bd[0].slice(5)} · ${fT(bd[1].tok)}`:'—'],
+    ['Longest Streak',`${st.lng} days`],
+    ['Current Streak',`${st.cur} days`],
+  ].map(([l,v])=>`<div class="si"><div class="si-l">${l}</div><div class="si-v">${esc(v)}</div></div>`).join('');
+}
+
+// ═══════════════════════════════════════
+//  LINE CHART
+// ═══════════════════════════════════════
+function renderLine(target,series,labels,opts={}){
+  if(!labels.length||series.every(s=>s.vals.every(v=>v===0))){target.innerHTML='<div class="emp">—</div>';return;}
+  const W=target.clientWidth||300,H=target.clientHeight||140;
+  const m={t:6,r:6,b:22,l:36};
+  const iW=W-m.l-m.r,iH=H-m.t-m.b;
+  const maxY=opts.maxY||Math.max(1,...series.flatMap(s=>s.vals));
+  const xAt=i=>m.l+(labels.length===1?iW/2:iW*(i/(labels.length-1)));
+  const yAt=v=>m.t+iH-(v/maxY)*iH;
+  let svg='';
+  for(let i=0;i<=3;i++){
+    const yv=maxY*(1-i/3),yt=yAt(yv);
+    svg+=`<line x1="${m.l}" y1="${yt}" x2="${W-m.r}" y2="${yt}" stroke="var(--grid-line)"/>`;
+    svg+=`<text x="1" y="${yt+3}" fill="var(--muted)" font-size="8.5">${(opts.yf||fT)(yv)}</text>`;
+  }
+  const step=Math.max(1,Math.ceil(labels.length/5));
+  labels.forEach((l,i)=>{
+    if(i%step!==0&&i!==labels.length-1)return;
+    svg+=`<text x="${xAt(i)}" y="${H-5}" text-anchor="middle" fill="var(--muted)" font-size="8.5">${esc(l)}</text>`;
+  });
+  for(const s of series){
+    const pts=s.vals.map((v,i)=>`${xAt(i)},${yAt(v)}`).join(' ');
+    if(s.fill)svg+=`<polygon points="${xAt(0)},${yAt(0)} ${pts} ${xAt(labels.length-1)},${yAt(0)}" fill="${s.fill}" opacity=".11"/>`;
+    svg+=`<polyline fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/>`;
+    s.vals.forEach((v,i)=>{
+      const t=`<strong>${esc(labels[i])}</strong><br><span class="d">${esc(s.name)}: ${(s.fmt||opts.yf||fT)(v)}</span>`;
+      svg+=`<circle cx="${xAt(i)}" cy="${yAt(v)}" r="2.4" fill="${s.color}" data-t="${esc(t)}"/>`;
+    });
+  }
+  target.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${svg}</svg>`;
+  bindTips(target);
+}
+
+// ═══════════════════════════════════════
+//  HOUR HEATMAP
+// ═══════════════════════════════════════
+function renderHmap(evs){
+  const mx=Array.from({length:7},()=>Array(24).fill(0));
+  for(const e of evs){const dow=(e.date.getDay()+6)%7,h=e.date.getHours();mx[dow][h]+=e.tot;}
+  const maxV=Math.max(...mx.flat(),1);
+  function hc(v){const t=v/maxV;if(t<=0)return'rgba(100,132,172,0.05)';if(t<.18)return'var(--h1)';if(t<.38)return'var(--h2)';if(t<.62)return'var(--h3)';if(t<.82)return'var(--h4)';return'var(--h5)';}
+  const rect=E.hmap.getBoundingClientRect();
+  const W=Math.max(320,Math.floor(rect.width||E.hmap.clientWidth||320));
+  const H=Math.max(170,Math.floor(rect.height||E.hmap.clientHeight||170));
+  const ML=19,MT=16,MR=6,MB=8,gx=2,gy=2;
+  const availW=Math.max(120,W-ML-MR-23*gx);
+  const availH=Math.max(70,H-MT-MB-6*gy);
+  const cW=Math.max(4,Math.floor(availW/24));
+  const cH=Math.max(7,Math.floor(availH/7));
+  let svg='';
+  [0,6,12,18,23].forEach(h=>svg+=`<text x="${ML+h*(cW+gx)}" y="9" fill="var(--muted)" font-size="8">${h}</text>`);
+  WD.forEach((n,i)=>svg+=`<text x="1" y="${MT+i*(cH+gy)+cH*.75}" fill="var(--muted)" font-size="8">${n[0]}</text>`);
+  for(let d=0;d<7;d++)for(let h=0;h<24;h++){
+    const val=mx[d][h];
+    const t=`<strong>${WD[d]} ${String(h).padStart(2,'0')}:00</strong><br><span class="d">Tokens: ${fT(val)}</span>`;
+    svg+=`<rect x="${ML+h*(cW+gx)}" y="${MT+d*(cH+gy)}" width="${cW}" height="${cH}" rx="2" fill="${hc(val)}" data-t="${esc(t)}"/>`;
+  }
+  E.hmap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${svg}</svg>`;
+  bindTips(E.hmap);
+}
+
+const DONUT_COLORS=['#3db8e8','#a07cf6','#4ecb87','#f5a623','#e8608a','#5b8def','#2dd4bf','#fb923c','#c084fc','#4ade80','#f472b6','#38bdf8','#94a3b8','#eab308'];
+function donutArc(cx,cy,r0,r1,a0,a1){
+  const x0=cx+r1*Math.cos(a0),y0=cy+r1*Math.sin(a0);
+  const x1=cx+r1*Math.cos(a1),y1=cy+r1*Math.sin(a1);
+  const x2=cx+r0*Math.cos(a1),y2=cy+r0*Math.sin(a1);
+  const x3=cx+r0*Math.cos(a0),y3=cy+r0*Math.sin(a0);
+  const large=a1-a0>Math.PI?1:0;
+  return`M${x0},${y0} A${r1},${r1} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${r0},${r0} 0 ${large} 0 ${x3},${y3} Z`;
+}
+function renderModelDonut(evs){
+  const by=new Map();
+  for(const e of evs){
+    if(isErr(e.kind))continue;
+    const name=(e.model&&e.model.trim())?e.model.trim():'(no model)';
+    by.set(name,(by.get(name)||0)+e.tot);
+  }
+  const parts=[...by.entries()].filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const total=sum(parts,([,v])=>v);
+  if(!parts.length||total<=0){
+    E.modelDonut.innerHTML='<div class="emp">—</div>';
+    E.modelLeg.innerHTML='';
+    E.modelBreakNote.textContent='No token rows in range';
+    return;
+  }
+  const maxSlices=12;
+  let slices=parts.slice(0,maxSlices);
+  const rest=parts.slice(maxSlices).reduce((s,[,v])=>s+v,0);
+  if(rest>0)slices=[...slices,['Other',rest]];
+  const W=220,H=220,cx=W/2,cy=H/2,r1=88,r0=52;
+  let a=-Math.PI/2;
+  let svg='';
+  slices.forEach(([label,val],i)=>{
+    const frac=val/total;
+    const a1=a+frac*Math.PI*2;
+    const col=DONUT_COLORS[i%DONUT_COLORS.length];
+    const tip=`<strong>${esc(label)}</strong><br><span class="d">${fT(val)} · ${fP(frac*100)}</span>`;
+    if(slices.length===1){
+      svg+=`<path d="${donutArc(cx,cy,r0,r1,-Math.PI/2,Math.PI/2)}" fill="${col}" stroke="rgba(9,13,18,0.55)" stroke-width="1" data-t="${esc(tip)}"/>`;
+      svg+=`<path d="${donutArc(cx,cy,r0,r1,Math.PI/2,3*Math.PI/2)}" fill="${col}" stroke="rgba(9,13,18,0.55)" stroke-width="1" data-t="${esc(tip)}"/>`;
+    }else{
+      svg+=`<path d="${donutArc(cx,cy,r0,r1,a,a1)}" fill="${col}" stroke="rgba(9,13,18,0.55)" stroke-width="1" data-t="${esc(tip)}"/>`;
+    }
+    a=a1;
+  });
+  E.modelDonut.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${svg}<text x="${cx}" y="${cy+5}" text-anchor="middle" fill="var(--muted)" font-size="10" font-weight="600">Σ ${fT(total)}</text></svg>`;
+  bindTips(E.modelDonut);
+  E.modelBreakNote.textContent=`${fN(slices.length)} models · non-error rows`;
+  E.modelLeg.innerHTML=slices.map(([label,val],i)=>{
+    const pct=fP(val/total*100);
+    const col=DONUT_COLORS[i%DONUT_COLORS.length];
+    return`<div class="li" title="${esc(label)}"><span class="ld" style="background:${col}"></span><span>${esc(label)} · ${pct}</span></div>`;
+  }).join('');
+}
+
+function closeDayModal(){
+  E.dayModal.classList.add('hidden');
+  E.dayModalBody.innerHTML='';
+}
+function openDayModal(dayKey){
+  const{evs}=filtered();
+  const rows=evs.filter(e=>dk(e.date)===dayKey);
+  const agg=new Map();
+  for(const e of rows){
+    const k=`${e.model}\t${e.kind}`;
+    if(!agg.has(k))agg.set(k,{model:e.model||'—',kind:e.kind,tot:0});
+    agg.get(k).tot+=e.tot;
+  }
+  const list=[...agg.values()].sort((a,b)=>b.tot-a.tot);
+  E.dayModalTitle.textContent=`${dayKey} · ${fN(rows.length)} rows · ${fT(sum(list,x=>x.tot))} tokens`;
+  if(!list.length){
+    E.dayModalBody.innerHTML=`<p style="color:var(--muted);font-size:12px;">该日无记录（可能不在当前筛选范围内）。</p>`;
+  }else{
+    E.dayModalBody.innerHTML=
+      `<table class="day-modal-table"><thead><tr><th>Model</th><th>Kind</th><th class="num">Tokens</th></tr></thead><tbody>`+
+      list.map(r=>`<tr><td>${esc(r.model||'—')}</td><td>${esc(r.kind||'—')}</td><td class="num">${esc(fT(r.tot))}</td></tr>`).join('')+
+      `</tbody></table>`;
+  }
+  E.dayModal.classList.remove('hidden');
+}
+
+// ═══════════════════════════════════════
+//  INCLUDED vs OVERAGE
+// ═══════════════════════════════════════
+function renderIOV(evs,bkts){
+  const incTot=sum(evs.filter(e=>isInc(e.kind)),e=>e.tot);
+  const ovgTot=sum(evs.filter(e=>isOvg(e.kind)),e=>e.tot);
+  const tot=incTot+ovgTot;
+  E.iovNote.textContent=tot>0?`Incl. ${fP(incTot/tot*100)} · Ovg. ${fP(ovgTot/tot*100)}`:'—';
+  E.iovLeg.innerHTML=[['Included','var(--green)'],['Overage','var(--amber)']].map(([l,c])=>`<div class="li"><span class="ld" style="background:${c}"></span>${l}</div>`).join('');
+  renderLine(E.iov,[
+    {name:'Included',vals:bkts.map(b=>b.inc),color:'var(--green)',fill:'var(--green)',fmt:fT},
+    {name:'Overage',vals:bkts.map(b=>b.ovg),color:'var(--amber)',fill:'var(--amber)',fmt:fT},
+  ],bkts.map(b=>b.label),{yf:fT});
+}
+
+// ═══════════════════════════════════════
+//  COST BREAKDOWN (HTML layout)
+// ═══════════════════════════════════════
+function renderCostBreak(evs){
+  const rates=inferRates(S.all);
+
+  if(!rates.hasData){
+    E.costBreak.innerHTML=`<div class="cost-empty"><span style="font-size:22px;color:var(--dim)">—</span><span>No usable On-Demand charge rows found in dataset</span></div>`;
+    return;
+  }
+
+  const stdTok=sum(evs.filter(e=>!isErr(e.kind)&&!isPrem(e.model)),e=>e.tot);
+  const premTok=sum(evs.filter(e=>!isErr(e.kind)&&isPrem(e.model)),e=>e.tot);
+  const actualCost=sum(evs,e=>e.cost);
+  const noPlan=estimateNoPlan(evs,rates);
+  const maxBar=Math.max(noPlan,actualCost,0.01);
+  const pctAct=Math.min(100,(actualCost/maxBar)*100);
+  const pctPlan=Math.min(100,(noPlan/maxBar)*100);
+  const stdPerM=(rates.stdRate*1e6).toFixed(2);
+  const premPerM=(rates.premRate*1e6).toFixed(2);
+
+  E.costBreak.innerHTML=`
+    <div class="cost-rate-grid">
+      <div class="cost-tile cost-tile--std">
+        <span class="cost-tile-label">Standard Models</span>
+        <span class="cost-tile-val">$${esc(stdPerM)}</span>
+        <span class="cost-tile-unit">per 1M tokens · range ${esc(fT(stdTok))}</span>
+      </div>
+      <div class="cost-tile cost-tile--prem">
+        <span class="cost-tile-label">Premium Models</span>
+        <span class="cost-tile-val">$${esc(premPerM)}</span>
+        <span class="cost-tile-unit">per 1M tokens · range ${esc(fT(premTok))}</span>
+      </div>
+    </div>
+
+    <div class="cost-sep"></div>
+
+    <div class="cost-hero">
+      <div class="cost-hero-label">Current Range · No-Plan Equivalent (Estimated)</div>
+      <div class="cost-hero-num">${esc(f$(noPlan))}</div>
+    </div>
+
+    <div class="cost-compare">
+      <div class="cost-row">
+        <span class="cost-row-l">Actual Overage</span>
+        <div class="cost-row-track" title="Relative to the longer bar in this card"><div class="cost-row-fill cost-row-fill--act" style="width:${pctAct}%"></div></div>
+        <span class="cost-row-v">${esc(f$(actualCost))}</span>
+      </div>
+      <div class="cost-row">
+        <span class="cost-row-l">No-Plan Equivalent</span>
+        <div class="cost-row-track"><div class="cost-row-fill cost-row-fill--plan" style="width:${pctPlan}%"></div></div>
+        <span class="cost-row-v">${esc(f$(noPlan))}</span>
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════
+//  RENDER ALL
+// ═══════════════════════════════════════
+function renderAll(){
+  const{evs,min,max,dmin,dmax}=filtered();
+  if(dmin){
+    const fad=firstActivityDay(S.all);
+    const gapNote=+fad>+dmin?` · Non-zero usage starts at ${dk(fad)}`:'';
+    E.meta.textContent=`${S.name} · File range ${dk(dmin)} — ${dk(dmax)} · ${fN(S.all.length)} rows${gapNote}`;
+  }
+  if(!evs.length){
+    E.kpi.innerHTML=Array(4).fill('<div class="kpi"><div class="kpi-l">—</div><div class="kpi-v">—</div></div>').join('');
+    [E.cal,E.trend,E.hmap,E.iov,E.modelDonut,E.costBreak].forEach(t=>{t.innerHTML='<div class="emp">—</div>';});
+    E.calStats.innerHTML='';
+    E.modelLeg.innerHTML='';
+    return;
+  }
+  const dm=groupDay(evs,min,max);
+  renderKPI(evs);
+  renderCal(evs,min,max,dm);
+  const{mode,bkts}=bucketize(evs,min,max);
+  E.trendGran.textContent=mode==='day'?'Daily':mode==='week'?'Weekly':'Monthly';
+  E.trendLeg.innerHTML=[['Total Tokens','var(--accent)'],['Output','var(--purple)']].map(([l,c])=>`<div class="li"><span class="ld" style="background:${c}"></span>${l}</div>`).join('');
+  renderLine(E.trend,[
+    {name:'Total Tokens',vals:bkts.map(b=>b.tot),color:'var(--accent)',fill:'var(--accent)'},
+    {name:'Output',vals:bkts.map(b=>b.out),color:'var(--purple)',fill:'var(--purple)'},
+  ],bkts.map(b=>b.label));
+  renderHmap(evs);
+  renderIOV(evs,bkts);
+  renderModelDonut(evs);
+  renderCostBreak(evs);
+}
+
+// ═══════════════════════════════════════
+//  LOAD DATASET
+// ═══════════════════════════════════════
+function loadDS(txt,name){
+  try{
+    const evs=parseCursor(txt);
+    S.all=evs;S.name=name||'data.csv';
+    const bmin=dk(evs[0].date),bmax=dk(evs[evs.length-1].date);
+    S.cs=bmin;S.ce=bmax;
+    E.ds.value=bmin;E.de.value=bmax;
+    E.ds.min=bmin;E.ds.max=bmax;
+    E.de.min=bmin;E.de.max=bmax;
+    // Switch to dashboard view
+    E.uploadScreen.classList.add('hidden');
+    E.dashScreen.classList.remove('hidden');
+    renderChips();
+    savePersist();
+    requestAnimationFrame(()=>requestAnimationFrame(renderAll));
+  }catch(e){
+    E.uploadErr.textContent='Load failed: '+e.message;
+  }
+}
+
+// ═══════════════════════════════════════
+//  EVENTS
+// ═══════════════════════════════════════
+async function handleFile(f){if(f&&f.name.toLowerCase().endsWith('.csv'))loadDS(await f.text(),f.name);}
+E.fi.onchange=async e=>{const f=e.target.files?.[0];if(f){await handleFile(f);e.target.value='';}};
+E.fi2.onchange=async e=>{const f=e.target.files?.[0];if(f){await handleFile(f);e.target.value='';}};
+E.ds.oninput=()=>{S.mode='custom';S.cs=E.ds.value;renderChips();renderAll();};
+E.de.oninput=()=>{S.mode='custom';S.ce=E.de.value;renderChips();renderAll();};
+// Some browsers need explicit picker trigger.
+E.ds.addEventListener('click',()=>{if(typeof E.ds.showPicker==='function')E.ds.showPicker();});
+E.de.addEventListener('click',()=>{if(typeof E.de.showPicker==='function')E.de.showPicker();});
+
+// Drag & drop — works on both screens
+let dc=0;
+document.addEventListener('dragenter',e=>{e.preventDefault();if(++dc===1)E.dov.classList.add('on');});
+document.addEventListener('dragleave',()=>{if(--dc<=0){dc=0;E.dov.classList.remove('on');}});
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',async e=>{
+  e.preventDefault();dc=0;E.dov.classList.remove('on');
+  const f=[...(e.dataTransfer?.files||[])].find(x=>x.name.toLowerCase().endsWith('.csv'));
+  if(f)handleFile(f);
+});
+
+let _rz=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(_rz);
+  _rz=setTimeout(()=>requestAnimationFrame(renderAll),120);
+});
+
+// Drag visual on upload box
+E.uploadBox.addEventListener('dragover',e=>{e.preventDefault();E.uploadBox.classList.add('drag-over');});
+E.uploadBox.addEventListener('dragleave',()=>E.uploadBox.classList.remove('drag-over'));
+
+E.cal.addEventListener('click',ev=>{
+  const el=ev.target;
+  if(!(el instanceof Element))return;
+  const day=el.getAttribute('data-day');
+  if(day)openDayModal(day);
+});
+E.cal.addEventListener('keydown',ev=>{
+  if(ev.key!=='Enter'&&ev.key!==' ')return;
+  const el=ev.target;
+  if(!(el instanceof Element))return;
+  const day=el.getAttribute('data-day');
+  if(day){ev.preventDefault();openDayModal(day);}
+});
+E.dayModalClose.onclick=closeDayModal;
+E.dayModal.addEventListener('click',ev=>{if(ev.target===E.dayModal)closeDayModal();});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&!E.dayModal.classList.contains('hidden'))closeDayModal();});
+
+if(loadPersist()){
+  E.uploadScreen.classList.add('hidden');
+  E.dashScreen.classList.remove('hidden');
+  renderChips();
+  requestAnimationFrame(()=>requestAnimationFrame(renderAll));
+}
+</script>
+</body>
+</html>
