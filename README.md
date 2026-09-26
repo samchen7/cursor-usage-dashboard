@@ -1,42 +1,23 @@
 # Cursor Usage Dashboard
 
-A **single-file** dashboard you open in the browser: upload Cursor’s usage CSV, parse and chart it **locally**—no backend or build step.
+Open `index.html`, drop a Cursor usage CSV, and chart it in the browser. Nothing is uploaded.
 
-## Features
+## Charts
 
-| Area | What it does |
-|------|----------------|
-| **KPIs** | Request count, total tokens, actual overage cost, no-subscription cost estimate, etc. |
-| **Activity calendar** | GitHub-style contribution heatmap; **click a day** for a modal with that day’s **`model × kind × tokens`** roll-up |
-| **Token trend** | Auto **daily / weekly / monthly** buckets by span |
-| **Hourly heatmap** | Weekday × hour token distribution |
-| **Included vs Overage** | Included vs on-demand token trends |
-| **Model breakdown** | Donut chart by **real model names** (not a coarse premium/standard split) |
-| **Cost estimate** | Infers unit rates from on-demand rows; compares actual overage vs a “no plan” estimate |
+- **KPIs** — requests, tokens, on-demand spend, and a no-plan estimate
+- **Activity calendar** — click a day for model × kind × tokens
+- **Token trend** — daily, weekly, or monthly
+- **Hourly heatmap** — weekday × hour
+- **Within month** — average tokens per day from the 1st to that month’s real last day (28–31)
+- **Model breakdown** — donut by model name
+- **Cost estimate** — input, cache write, cache read, and output at [Cursor list rates](https://cursor.com/docs/models-and-pricing) (2026-09-25). Models without a list price use their own on-demand rows
 
-Also: **range chips** (7D–All + custom dates), **change file**, global CSV drag-and-drop. After a successful load, data is saved to **localStorage** so the next visit in the same browser opens straight to the dashboard (you can always upload a new CSV to replace it).
+Time range is 7D–All or custom dates. The last file stays in localStorage. Layout is for a desktop window at least 1440px wide.
 
-> Layout is desktop-oriented; a window **≥ 1440px** wide is recommended.
+## Use
 
-## How to use
+Export CSV from Cursor **Settings → Usage**, then open `index.html` and select or drop the file.
 
-1. Open `index.html` from the repo root in a browser (or your deployed URL).
-2. **Select or drop** a `.csv` file (drag-and-drop works on the dashboard too).
-3. Use the top chips for the time range; **Custom** uses the date inputs.
+## Deploy
 
-All processing stays on your machine—nothing is uploaded to a server.
-
-## Where the CSV comes from
-
-In Cursor: **Settings → Usage → Export CSV** (wording may vary slightly by version).
-
-## Deploy (e.g. GitHub)
-
-Push the repo to GitHub, then enable **GitHub Pages** (Settings → Pages → branch `main`, folder `/ (root)`). The site serves `index.html` at the root.
-
-Any static host (Vercel, Netlify, etc.) works as well—**no** framework or build command required.
-
-## Tech
-
-- One file: `index.html` (HTML + CSS + vanilla JS)
-- Charts: hand-written **SVG**, **no npm** dependencies
+GitHub Pages: branch `main`, folder `/ (root)`. Any static host works. One HTML file, hand-written SVG, no build.

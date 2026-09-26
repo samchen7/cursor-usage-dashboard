@@ -239,6 +239,7 @@ button,input{font:inherit;color:inherit;}
 .cost-row-fill{height:100%;border-radius:99px;transition:width 0.2s ease;}
 .cost-row-fill--act{background:linear-gradient(90deg,var(--amber),#d4941f);}
 .cost-row-fill--plan{background:linear-gradient(90deg,var(--accent),#2a9ec9);}
+.cost-row-fill--inf{background:linear-gradient(90deg,var(--purple),#7a5ad4);}
 .cost-row-v{
   flex:0 0 auto;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;
   color:var(--text);min-width:4.5em;text-align:right;
@@ -248,6 +249,15 @@ button,input{font:inherit;color:inherit;}
   gap:8px;min-height:120px;padding:16px;text-align:center;
   color:var(--muted);font-size:12px;
 }
+.cost-models{display:flex;flex-direction:column;gap:7px;}
+.cost-m{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.cost-m-top{display:flex;align-items:baseline;gap:8px;min-width:0;}
+.cost-m-name{flex:1;min-width:0;font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cost-m-price{flex:0 0 auto;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;}
+.cost-m-est{flex:0 0 auto;font-size:12px;font-weight:650;font-variant-numeric:tabular-nums;min-width:4.2em;text-align:right;}
+.cost-m-est.is-inf{color:var(--amber);}
+.cost-m-sub{font-size:9.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cost-foot{font-size:9.5px;line-height:1.45;color:var(--dim);}
 @media(max-width:520px){
   .cost-rate-grid{grid-template-columns:1fr;}
   .cost-row-l{flex-basis:76px;font-size:9.5px;}
@@ -384,10 +394,9 @@ button,input{font:inherit;color:inherit;}
         <div class="ph"><span class="pt">Hourly Heatmap</span><span class="pn">Hour × Weekday</span></div>
         <div class="pb" id="hmap"></div>
       </div>
-      <!-- Included vs Overage trend -->
+      <!-- Token use from month start to month end -->
       <div class="panel">
-        <div class="ph"><span class="pt">Included vs Overage</span><span class="pn" id="iovNote">—</span></div>
-        <div class="leg" id="iovLeg"></div>
+        <div class="ph"><span class="pt">Within Month</span><span class="pn" id="iovNote">—</span></div>
         <div class="pb" id="iov"></div>
       </div>
       <!-- Model breakdown -->
@@ -398,7 +407,7 @@ button,input{font:inherit;color:inherit;}
       </div>
       <!-- Cost breakdown -->
       <div class="panel panel-cost">
-        <div class="ph"><span class="pt">Cost Estimate</span><span class="pn">Infer unit price from On-Demand · No-plan equivalent</span></div>
+        <div class="ph"><span class="pt">Cost Estimate</span><span class="pn" id="costNote">List price · 2026-09-25</span></div>
         <div class="pb pb-cost" id="costBreak"></div>
       </div>
     </div>
@@ -411,7 +420,9 @@ button,input{font:inherit;color:inherit;}
 // ═══════════════════════════════════════
 const RANGES=[['7d','7D'],['30d','30D'],['3m','3M'],['6m','6M'],['1y','1Y'],['all','All'],['custom','Custom']];
 const WD=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-const PREMIUM=/gpt-?4|gpt-?5|o1|o3|claude-3-(opus|sonnet-3)|gemini-1\.5-pro|gemini-2|max/i;
+// Official list rates, USD per 1M tokens. Source: https://cursor.com/docs/models-and-pricing
+const PRICE_AS_OF='2026-09-25';
+const PRICE_SOURCE='https://cursor.com/docs/models-and-pricing';
 
 // ═══════════════════════════════════════
 //  STATE
@@ -432,9 +443,9 @@ const E={
   cal:$('cal'),calStats:$('calStats'),calRange:$('calRange'),
   trend:$('trend'),trendLeg:$('trendLeg'),trendGran:$('trendGran'),
   hmap:$('hmap'),
-  iov:$('iov'),iovNote:$('iovNote'),iovLeg:$('iovLeg'),
+  iov:$('iov'),iovNote:$('iovNote'),
   modelDonut:$('modelDonut'),modelLeg:$('modelLeg'),modelBreakNote:$('modelBreakNote'),
-  costBreak:$('costBreak'),
+  costBreak:$('costBreak'),costNote:$('costNote'),
   dayModal:$('dayModal'),dayModalTitle:$('dayModalTitle'),dayModalBody:$('dayModalBody'),dayModalClose:$('dayModalClose'),
 };
 
@@ -581,37 +592,224 @@ function parseCursor(txt){
 const isErr=k=>/error/i.test(k);
 const isInc=k=>/included/i.test(k);
 const isOvg=k=>/on.?demand/i.test(k);
-const isPrem=m=>PREMIUM.test(m);
 
 // ═══════════════════════════════════════
-//  COST INFERENCE
-//  Infer token unit price from on-demand rows, then estimate no-plan total cost.
+//  LIST PRICES
+//  cacheWrite null = no separate fee; those tokens bill at the input rate.
+//  longAfter: when input-side tokens (uncached + cache write + cache read)
+//  exceed this, longRates replace the base rates for the whole row.
 // ═══════════════════════════════════════
-function inferRates(events){
-  // Use on-demand rows with real cost.
-  const ovg=events.filter(e=>isOvg(e.kind)&&e.cost>0&&e.tot>0);
-  if(!ovg.length)return{stdRate:0,premRate:0,blended:0,hasData:false};
-
-  const std=ovg.filter(e=>!isPrem(e.model));
-  const prem=ovg.filter(e=>isPrem(e.model));
-
-  const blended=sum(ovg,e=>e.cost)/sum(ovg,e=>e.tot);
-  const stdTok=sum(std,e=>e.tot);
-  const premTok=sum(prem,e=>e.tot);
-  const stdRate=stdTok>0?sum(std,e=>e.cost)/stdTok:blended;
-  const premRate=premTok>0?sum(prem,e=>e.cost)/premTok:blended;
-
-  return{stdRate,premRate,blended,hasData:true,ovgCount:ovg.length};
+function scaleRates(r,inputMul,outputMul){
+  const om=outputMul==null?1:outputMul;
+  return {
+    input:r.input*inputMul,
+    cacheWrite:r.cacheWrite==null?null:r.cacheWrite*inputMul,
+    cacheRead:r.cacheRead==null?null:r.cacheRead*inputMul,
+    output:r.output*om,
+  };
 }
+function M(name,provider,pool,input,cacheWrite,cacheRead,output,aliases,opt){
+  const rates={input,cacheWrite,cacheRead,output};
+  const o=opt||{};
+  return {
+    name,provider,pool,rates,aliases,
+    longAfter:o.longAfter||0,
+    longRates:o.longIn?scaleRates(rates,o.longIn,o.longOut):null,
+    legacy:!!o.legacy,
+  };
+}
+const L272={longAfter:272000,longIn:2,longOut:1};
+const MODEL_PRICES=[
+  M('Grok 4.7','Cursor','Cursor',2,null,0.5,6,['grok-4.7','cursor-grok-4.7'],{longAfter:256000,longIn:2,longOut:2}),
+  M('Grok 4.7 Fast','Cursor','Cursor',4,null,1,12,['grok-4.7-fast','cursor-grok-4.7-fast'],{longAfter:256000,longIn:1.5,longOut:1.5}),
+  M('Grok 4.7 500k','Cursor','Cursor',4,null,1,12,['grok-4.7-500k','cursor-grok-4.7-500k']),
+  M('Grok 4.7 500k Fast','Cursor','Cursor',6,null,1.5,18,['grok-4.7-500k-fast','cursor-grok-4.7-500k-fast']),
+  M('Grok 4.6','Cursor','Cursor',2,null,0.5,6,['grok-4.6','cursor-grok-4.6']),
+  M('Grok 4.6 Fast','Cursor','Cursor',4,null,1,12,['grok-4.6-fast','cursor-grok-4.6-fast']),
+  M('Grok 4.5','Cursor','Cursor',2,null,0.5,6,['grok-4.5','cursor-grok-4.5']),
+  M('Grok 4.5 Fast','Cursor','Cursor',4,null,1,18,['grok-4.5-fast','cursor-grok-4.5-fast']),
+  M('Composer 1','Cursor','Cursor',1.25,null,0.125,10,['composer-1'],{legacy:true}),
+  M('Composer 1.5','Cursor','Cursor',3.5,null,0.35,17.5,['composer-1.5'],{legacy:true}),
+  M('Composer 2','Cursor','Cursor',0.5,null,0.2,2.5,['composer-2'],{legacy:true}),
+  M('Composer 2 Fast','Cursor','Cursor',1.5,null,0.35,7.5,['composer-2-fast'],{legacy:true}),
+  M('Composer 2.5','Cursor','Cursor',0.5,null,0.2,2.5,['composer-2.5']),
+  M('Composer 2.5 Fast','Cursor','Cursor',3,null,0.5,15,['composer-2.5-fast']),
 
-function estimateNoPlan(events,rates){
-  if(!rates.hasData)return 0;
-  let total=0;
-  for(const e of events){
-    if(isErr(e.kind))continue;
-    total+=e.tot*(isPrem(e.model)?rates.premRate:rates.stdRate);
+  M('Claude 4 Sonnet','Anthropic','Other',3,3.75,0.3,15,['claude-4-sonnet','claude-sonnet-4']),
+  M('Claude 4 Sonnet 1M','Anthropic','Other',6,7.5,0.6,22.5,['claude-4-sonnet-1m','claude-sonnet-4-1m']),
+  M('Claude 4.5 Haiku','Anthropic','Other',1,1.25,0.1,5,['claude-4.5-haiku','claude-haiku-4-5','claude-haiku-4.5']),
+  M('Claude 4.5 Opus','Anthropic','Other',5,6.25,0.5,25,['claude-4.5-opus','claude-opus-4-5','claude-opus-4.5']),
+  M('Claude 4.5 Sonnet','Anthropic','Other',3,3.75,0.3,15,['claude-4.5-sonnet','claude-sonnet-4-5','claude-sonnet-4.5']),
+  M('Claude 4.6 Opus','Anthropic','Other',5,6.25,0.5,25,['claude-4.6-opus','claude-opus-4-6','claude-opus-4.6']),
+  M('Claude 4.6 Sonnet','Anthropic','Other',3,3.75,0.3,15,['claude-4.6-sonnet','claude-sonnet-4-6','claude-sonnet-4.6']),
+  M('Claude 4.7 Opus','Anthropic','Other',5,6.25,0.5,25,['claude-4.7-opus','claude-opus-4-7','claude-opus-4.7']),
+  M('Claude Opus 4.7 Fast','Anthropic','Other',30,37.5,3,150,['claude-opus-4.7-fast','claude-4.7-opus-fast','claude-opus-4-7-fast']),
+  M('Claude Opus 4.8','Anthropic','Other',5,6.25,0.5,25,['claude-opus-4.8','claude-opus-4-8','claude-4.8-opus']),
+  M('Claude Opus 4.8 Fast','Anthropic','Other',10,12.5,1,50,['claude-opus-4.8-fast','claude-opus-4-8-fast','claude-4.8-opus-fast']),
+  M('Claude Fable 5','Anthropic','Other',10,12.5,1,50,['claude-fable-5']),
+  M('Claude Fable 5.1','Anthropic','Other',10,12.5,0.25,50,['claude-fable-5.1','claude-fable-5-1']),
+  M('Claude Opus 5','Anthropic','Other',5,6.25,0.5,25,['claude-opus-5']),
+  M('Claude Opus 5 Fast','Anthropic','Other',10,12.5,1,50,['claude-opus-5-fast']),
+  M('Claude Opus 5.5','Anthropic','Other',4,5,0.2,20,['claude-opus-5.5','claude-opus-5-5']),
+  M('Claude Opus 5.5 Fast','Anthropic','Other',8,10,0.4,40,['claude-opus-5.5-fast','claude-opus-5-5-fast']),
+  M('Claude Sonnet 5','Anthropic','Other',2,2.5,0.2,10,['claude-sonnet-5']),
+
+  M('Gemini 2.5 Flash','Google','Other',0.3,null,0.03,2.5,['gemini-2.5-flash']),
+  M('Gemini 3 Flash','Google','Other',0.5,null,0.05,3,['gemini-3-flash','gemini-3-flash-preview']),
+  M('Gemini 3 Pro','Google','Other',2,null,0.2,12,['gemini-3-pro','gemini-3-pro-preview']),
+  M('Gemini 3 Pro Image','Google','Other',2,null,0.2,12,['gemini-3-pro-image','gemini-3-pro-image-preview']),
+  M('Gemini 3.1 Pro','Google','Other',2,null,0.2,12,['gemini-3.1-pro','gemini-3.1-pro-preview']),
+  M('Gemini 3.5 Flash','Google','Other',1.5,null,0.15,9,['gemini-3.5-flash']),
+  M('Gemini 3.6 Flash','Google','Other',1.5,null,0.15,7.5,['gemini-3.6-flash']),
+  M('Gemini 3.7 Flash','Google','Other',0.75,null,0.075,3.5,['gemini-3.7-flash']),
+  M('Gemini 3.8 Flash','Google','Other',0.75,null,0.075,3.5,['gemini-3.8-flash']),
+  M('GLM 5.2','Z.ai','Other',1.4,null,0.26,4.4,['glm-5.2']),
+
+  M('GPT-5','OpenAI','Other',1.25,null,0.125,10,['gpt-5']),
+  M('GPT-5 Fast','OpenAI','Other',2.5,null,0.25,20,['gpt-5-fast']),
+  M('GPT-5 Mini','OpenAI','Other',0.25,null,0.025,2,['gpt-5-mini']),
+  M('GPT-5 Codex','OpenAI','Other',1.25,null,0.125,10,['gpt-5-codex']),
+  M('GPT-5.1 Codex','OpenAI','Other',1.25,null,0.125,10,['gpt-5.1-codex']),
+  M('GPT-5.1 Codex Max','OpenAI','Other',1.25,null,0.125,10,['gpt-5.1-codex-max']),
+  M('GPT-5.1 Codex Mini','OpenAI','Other',0.25,null,0.025,2,['gpt-5.1-codex-mini']),
+  M('GPT-5.2','OpenAI','Other',1.75,null,0.175,14,['gpt-5.2']),
+  M('GPT-5.2 Codex','OpenAI','Other',1.75,null,0.175,14,['gpt-5.2-codex']),
+  M('GPT-5.3 Codex','OpenAI','Other',1.75,null,0.175,14,['gpt-5.3-codex','premium-codex-5.3','codex-5.3']),
+  M('GPT-5.4','OpenAI','Other',2.5,null,0.25,15,['gpt-5.4'],L272),
+  M('GPT-5.4 Fast','OpenAI','Other',5,null,0.5,30,['gpt-5.4-fast'],L272),
+  M('GPT-5.4 Mini','OpenAI','Other',0.75,null,0.075,4.5,['gpt-5.4-mini']),
+  M('GPT-5.4 Nano','OpenAI','Other',0.2,null,0.02,1.25,['gpt-5.4-nano']),
+  M('GPT-5.5','OpenAI','Other',5,null,0.5,30,['gpt-5.5'],{longAfter:272000,longIn:2,longOut:1.5}),
+  M('GPT-5.6 Luna','OpenAI','Other',0.2,0.25,0.02,1.2,['gpt-5.6-luna'],L272),
+  M('GPT-5.6 Luna Fast','OpenAI','Other',0.4,0.5,0.04,2.4,['gpt-5.6-luna-fast'],L272),
+  M('GPT-5.6 Sol','OpenAI','Other',4,5,0.4,20,['gpt-5.6-sol'],L272),
+  M('GPT-5.6 Sol Fast','OpenAI','Other',8,10,0.8,40,['gpt-5.6-sol-fast'],L272),
+  M('GPT-5.6 Terra','OpenAI','Other',2,2.5,0.2,12,['gpt-5.6-terra'],L272),
+  M('GPT-5.6 Terra Fast','OpenAI','Other',4,5,0.4,24,['gpt-5.6-terra-fast'],L272),
+  M('Kimi K2.7 Code','Moonshot','Other',0.95,null,0.19,4,['kimi-k2.7-code','kimi-k2.7']),
+  M('Kimi K3','Moonshot','Other',3,null,0.3,15,['kimi-k3']),
+  M('Muse Spark 1.3','Meta','Other',1.25,null,0.15,4.25,['muse-spark-1.3']),
+];
+function expandAlias(a){
+  const out=new Set([a]);
+  out.add(a.replace(/(\d)\.(\d)/g,'$1-$2'));
+  return [...out];
+}
+const PRICE_ALIASES=[];
+for(const model of MODEL_PRICES){
+  for(const a of model.aliases){
+    for(const key of expandAlias(a)) PRICE_ALIASES.push({key,model});
   }
-  return total;
+}
+PRICE_ALIASES.sort((a,b)=>b.key.length-a.key.length);
+const PRICE_BY_KEY=new Map(PRICE_ALIASES.map(a=>[a.key,a.model]));
+
+function normModel(s){
+  return String(s||'').trim().toLowerCase()
+    .replace(/[()]/g,'')
+    .replace(/[_/]+/g,'-')
+    .replace(/\s+/g,'-')
+    .replace(/-+/g,'-')
+    .replace(/^-|-$/g,'');
+}
+function stripEffort(id){
+  let s=id;
+  while(/-(thinking|non-thinking|xhigh|extra-high|high|medium|low)$/.test(s)){
+    s=s.replace(/-(thinking|non-thinking|xhigh|extra-high|high|medium|low)$/,'');
+  }
+  return s;
+}
+function findPrice(key){
+  if(PRICE_BY_KEY.has(key)) return PRICE_BY_KEY.get(key);
+  if(key.endsWith('-preview')){
+    const base=key.slice(0,-8);
+    if(PRICE_BY_KEY.has(base)) return PRICE_BY_KEY.get(base);
+  }
+  return null;
+}
+function matchPrice(raw){
+  let id=normModel(raw);
+  if(!id) return null;
+  id=id.replace(/-fast-mode$/,'-fast');
+  let fast=false;
+  if(id.endsWith('-fast')){fast=true;id=id.slice(0,-5);}
+  else if(id.includes('-fast-')){fast=true;id=id.replace('-fast-','-');}
+  id=stripEffort(id).replace(/-mode$/,'');
+  const want=fast?id+'-fast':id;
+  let entry=findPrice(want);
+  let maxMode=false;
+  if(!entry && !fast && id.endsWith('-max')){
+    entry=findPrice(stripEffort(id.slice(0,-4)));
+    if(entry) maxMode=true;
+  }
+  if(!entry) return null;
+  return {entry,maxMode};
+}
+function ratesFor(entry,e){
+  const inputTok=(e.inW||0)+(e.inWo||0)+(e.cr||0);
+  if(entry.longAfter && inputTok>entry.longAfter && entry.longRates) return {rates:entry.longRates,long:true};
+  return {rates:entry.rates,long:false};
+}
+function rowListCost(e,picked,maxMode){
+  const r=picked.rates;
+  const cw=r.cacheWrite==null?r.input:r.cacheWrite;
+  const cr=r.cacheRead==null?0:r.cacheRead;
+  let cost=(e.inWo*r.input + e.inW*cw + e.cr*cr + e.out*r.output)/1e6;
+  if(maxMode) cost*=1.2;
+  return cost;
+}
+function inferModelRates(events){
+  const acc=new Map();
+  for(const e of events){
+    if(!(isOvg(e.kind)&&e.cost>0&&e.tot>0)||matchPrice(e.model)) continue;
+    const k=e.model||'';
+    if(!acc.has(k)) acc.set(k,{cost:0,tok:0});
+    const a=acc.get(k);
+    a.cost+=e.cost; a.tok+=e.tot;
+  }
+  const rates=new Map();
+  for(const [k,a] of acc) if(a.tok>0) rates.set(k,a.cost/a.tok);
+  return rates;
+}
+function priceEvents(events){
+  const fb=inferModelRates(S.all);
+  const by=new Map();
+  let list=0,inferred=0,actual=0,pricedN=0,unpricedN=0;
+  for(const e of events){
+    actual+=e.cost||0;
+    if(isErr(e.kind)) continue;
+    const hit=matchPrice(e.model);
+    const parts=(e.inW||0)+(e.inWo||0)+(e.cr||0)+(e.out||0);
+    let cost=0,how='none',long=false,rates=null,maxMode=false;
+    const ownRate=fb.get(e.model)||0;
+    if(hit && parts>0){
+      const picked=ratesFor(hit.entry,e);
+      rates=picked.rates; long=picked.long; maxMode=hit.maxMode;
+      cost=rowListCost(e,picked,hit.maxMode);
+      list+=cost; how='list'; pricedN++;
+    }else if(ownRate>0 && e.tot>0){
+      cost=e.tot*ownRate; inferred+=cost; how='inferred'; unpricedN++;
+    }else{
+      unpricedN++;
+    }
+    const key=hit?hit.entry.name:(e.model||'Unknown');
+    if(!by.has(key)) by.set(key,{name:key,provider:hit?hit.entry.provider:'',pool:hit?hit.entry.pool:'',rates:hit?hit.entry.rates:null,list:0,inferred:0,tok:0,rows:0,long:false,maxMode:false,legacy:!!(hit&&hit.entry.legacy),how});
+    const g=by.get(key);
+    g.tok+=e.tot; g.rows++;
+    if(how==='list'){g.list+=cost; if(!g.rates) g.rates=rates;}
+    else if(how==='inferred') g.inferred+=cost;
+    if(long) g.long=true;
+    if(maxMode) g.maxMode=true;
+    if(how==='list') g.how='list';
+    else if(g.how!=='list' && how==='inferred') g.how='inferred';
+  }
+  const groups=[...by.values()].sort((a,b)=>(b.list+b.inferred)-(a.list+a.inferred)||b.tok-a.tok);
+  return {list,inferred,total:list+inferred,actual,groups,pricedN,unpricedN,fb};
+}
+function fRate(n){
+  if(n==null||!isFinite(n)) return '—';
+  const t=Math.round(n*1000)/1000;
+  return '$'+t;
 }
 
 // ═══════════════════════════════════════
@@ -681,16 +879,18 @@ function renderKPI(evs){
   const reqs=valid.length;
   const totTok=sum(evs,e=>e.tot);
   const outTok=sum(evs,e=>e.out);
-  const actualCost=sum(evs,e=>e.cost); // Actual pay-as-you-go cost
-  // Infer rate from full dataset to avoid drift in short windows.
-  const rates=inferRates(S.all);
-  const noPlanCost=estimateNoPlan(evs,rates);
+  const actualCost=sum(evs,e=>e.cost);
+  const quote=priceEvents(evs);
+  const priced=quote.pricedN>0||quote.inferred>0;
+  const noPlanSub=quote.pricedN
+    ?(quote.inferred>0?`List ${f$(quote.list)} · inferred ${f$(quote.inferred)}`:`Official list price · ${PRICE_AS_OF}`)
+    :(quote.inferred>0?'Inferred from unlisted On-Demand rows':'No list price for these models');
 
   const cards=[
     {l:'Total Requests',v:fN(reqs),s:`Including errors: ${evs.length} rows`,hi:false},
     {l:'Total Tokens',v:fT(totTok),s:`Output ${fT(outTok)}`,hi:false},
     {l:'Actual Overage Cost',v:f$(actualCost),s:`On-Demand charges`,hi:false},
-    {l:'No-Plan Equivalent',v:rates.hasData?f$(noPlanCost):'—',s:rates.hasData?`Inferred unit rate × total tokens`:'No On-Demand data to infer rate',hi:true},
+    {l:'No-Plan Equivalent',v:priced?f$(quote.total):'—',s:noPlanSub,hi:true},
   ];
   E.kpi.innerHTML=cards.map(c=>`<div class="kpi${c.hi?' kpi-highlight':''}"><div class="kpi-l">${esc(c.l)}</div><div class="kpi-v">${esc(c.v)}</div><div class="kpi-s">${esc(c.s)}</div></div>`).join('');
 }
@@ -745,11 +945,12 @@ function renderCal(evs,min,max,dm){
 //  LINE CHART
 // ═══════════════════════════════════════
 function renderLine(target,series,labels,opts={}){
-  if(!labels.length||series.every(s=>s.vals.every(v=>v===0))){target.innerHTML='<div class="emp">—</div>';return;}
+  const nums=series.flatMap(s=>s.vals.filter(v=>typeof v==='number'&&isFinite(v)));
+  if(!labels.length||!nums.length||nums.every(v=>v===0)){target.innerHTML='<div class="emp">—</div>';return;}
   const W=target.clientWidth||300,H=target.clientHeight||140;
   const m={t:6,r:6,b:22,l:36};
   const iW=W-m.l-m.r,iH=H-m.t-m.b;
-  const maxY=opts.maxY||Math.max(1,...series.flatMap(s=>s.vals));
+  const maxY=opts.maxY||Math.max(1,...nums);
   const xAt=i=>m.l+(labels.length===1?iW/2:iW*(i/(labels.length-1)));
   const yAt=v=>m.t+iH-(v/maxY)*iH;
   let svg='';
@@ -758,19 +959,36 @@ function renderLine(target,series,labels,opts={}){
     svg+=`<line x1="${m.l}" y1="${yt}" x2="${W-m.r}" y2="${yt}" stroke="var(--grid-line)"/>`;
     svg+=`<text x="1" y="${yt+3}" fill="var(--muted)" font-size="8.5">${(opts.yf||fT)(yv)}</text>`;
   }
-  const step=Math.max(1,Math.ceil(labels.length/5));
-  labels.forEach((l,i)=>{
-    if(i%step!==0&&i!==labels.length-1)return;
-    svg+=`<text x="${xAt(i)}" y="${H-5}" text-anchor="middle" fill="var(--muted)" font-size="8.5">${esc(l)}</text>`;
-  });
+  const axis=opts.axis;
+  if(axis){
+    axis.forEach((l,i)=>{
+      if(!l)return;
+      const anchor=i===0?'start':i===axis.length-1?'end':'middle';
+      svg+=`<text x="${xAt(i)}" y="${H-5}" text-anchor="${anchor}" fill="var(--muted)" font-size="8.5">${esc(l)}</text>`;
+    });
+  }else{
+    const step=Math.max(1,Math.ceil(labels.length/5));
+    labels.forEach((l,i)=>{
+      if(i%step!==0&&i!==labels.length-1)return;
+      svg+=`<text x="${xAt(i)}" y="${H-5}" text-anchor="middle" fill="var(--muted)" font-size="8.5">${esc(l)}</text>`;
+    });
+  }
   for(const s of series){
-    const pts=s.vals.map((v,i)=>`${xAt(i)},${yAt(v)}`).join(' ');
-    if(s.fill)svg+=`<polygon points="${xAt(0)},${yAt(0)} ${pts} ${xAt(labels.length-1)},${yAt(0)}" fill="${s.fill}" opacity=".11"/>`;
-    svg+=`<polyline fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/>`;
+    let seg=[];
+    const flush=()=>{
+      if(!seg.length)return;
+      const pts=seg.map(p=>`${p.x},${p.y}`).join(' ');
+      if(s.fill&&seg.length>1)svg+=`<polygon points="${seg[0].x},${yAt(0)} ${pts} ${seg[seg.length-1].x},${yAt(0)}" fill="${s.fill}" opacity=".11"/>`;
+      if(seg.length>1)svg+=`<polyline fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/>`;
+      seg=[];
+    };
     s.vals.forEach((v,i)=>{
+      if(typeof v!=='number'||!isFinite(v)){flush();return;}
+      seg.push({x:xAt(i),y:yAt(v)});
       const t=`<strong>${esc(labels[i])}</strong><br><span class="d">${esc(s.name)}: ${(s.fmt||opts.yf||fT)(v)}</span>`;
       svg+=`<circle cx="${xAt(i)}" cy="${yAt(v)}" r="2.4" fill="${s.color}" data-t="${esc(t)}"/>`;
     });
+    flush();
   }
   target.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${svg}</svg>`;
   bindTips(target);
@@ -885,62 +1103,115 @@ function openDayModal(dayKey){
 }
 
 // ═══════════════════════════════════════
-//  INCLUDED vs OVERAGE
+//  WITHIN MONTH — total tokens, start aligned to the real last day
 // ═══════════════════════════════════════
-function renderIOV(evs,bkts){
-  const incTot=sum(evs.filter(e=>isInc(e.kind)),e=>e.tot);
-  const ovgTot=sum(evs.filter(e=>isOvg(e.kind)),e=>e.tot);
-  const tot=incTot+ovgTot;
-  E.iovNote.textContent=tot>0?`Incl. ${fP(incTot/tot*100)} · Ovg. ${fP(ovgTot/tot*100)}`:'—';
-  E.iovLeg.innerHTML=[['Included','var(--green)'],['Overage','var(--amber)']].map(([l,c])=>`<div class="li"><span class="ld" style="background:${c}"></span>${l}</div>`).join('');
+// Day 1 of every month shares the left edge. The real last day — 28, 29, 30, or 31 —
+// shares the right edge. Days in between are spread across the interior of that month.
+const MONTH_SLOTS=9;
+function daysInMonth(d){return new Date(d.getFullYear(),d.getMonth()+1,0).getDate();}
+function monthSlot(d){
+  const dim=daysInMonth(d),dom=d.getDate(),last=MONTH_SLOTS-1;
+  if(dom<=1)return 0;
+  if(dom>=dim)return last;
+  const interior=MONTH_SLOTS-2,span=dim-2;
+  if(span<=0)return 0;
+  return 1+Math.min(interior-1,Math.floor(((dom-2)/span)*interior));
+}
+function monthProfile(evs,min,max){
+  const byDay=new Map();
+  for(const e of evs){
+    if(isErr(e.kind))continue;
+    const k=dk(e.date);
+    byDay.set(k,(byDay.get(k)||0)+e.tot);
+  }
+  const lo=sod(min),hi=sod(max);
+  const months=new Map();
+  for(let y=lo.getFullYear(),m=lo.getMonth(); y<hi.getFullYear()||(y===hi.getFullYear()&&m<=hi.getMonth());){
+    const dim=new Date(y,m+1,0).getDate();
+    const slots=Array.from({length:MONTH_SLOTS},()=>({tok:0,days:0}));
+    let any=false;
+    for(let dom=1;dom<=dim;dom++){
+      const d=new Date(y,m,dom);
+      if(d<lo||d>hi)continue;
+      any=true;
+      const slot=monthSlot(d);
+      slots[slot].days++;
+      slots[slot].tok+=byDay.get(dk(d))||0;
+    }
+    if(any)months.set(`${y}-${m}`,slots);
+    m++;if(m>11){m=0;y++;}
+  }
+  const vals=[],labels=[],axis=[];
+  for(let i=0;i<MONTH_SLOTS;i++){
+    const daily=[];
+    for(const slots of months.values()){
+      const c=slots[i];
+      if(!c.days)continue;
+      daily.push(c.tok/c.days);
+    }
+    const n=daily.length;
+    const mid=i===(MONTH_SLOTS-1)/2;
+    const where=i===0?'Month start':i===MONTH_SLOTS-1?'Month end':mid?'Mid-month':`${Math.round(100*i/(MONTH_SLOTS-1))}% through the month`;
+    labels.push(n?`${where} · ${n} mo`:`${where} · no data`);
+    axis.push(i===0?'Start':i===MONTH_SLOTS-1?'End':mid?'Mid':'');
+    vals.push(n?daily.reduce((s,v)=>s+v,0)/n:null);
+  }
+  return{vals,labels,axis,months:months.size};
+}
+function renderIOV(evs,min,max){
+  const profile=monthProfile(evs,min,max);
+  E.iovNote.textContent=profile.months?`Avg tokens/day · ${profile.months} mo · ends align`:'—';
+  const perDay=v=>fT(v)+'/d';
   renderLine(E.iov,[
-    {name:'Included',vals:bkts.map(b=>b.inc),color:'var(--green)',fill:'var(--green)',fmt:fT},
-    {name:'Overage',vals:bkts.map(b=>b.ovg),color:'var(--amber)',fill:'var(--amber)',fmt:fT},
-  ],bkts.map(b=>b.label),{yf:fT});
+    {name:'Tokens',vals:profile.vals,color:'var(--accent)',fill:'var(--accent)',fmt:perDay},
+  ],profile.labels,{yf:fT,axis:profile.axis});
 }
 
 // ═══════════════════════════════════════
 //  COST BREAKDOWN (HTML layout)
 // ═══════════════════════════════════════
 function renderCostBreak(evs){
-  const rates=inferRates(S.all);
-
-  if(!rates.hasData){
-    E.costBreak.innerHTML=`<div class="cost-empty"><span style="font-size:22px;color:var(--dim)">—</span><span>No usable On-Demand charge rows found in dataset</span></div>`;
+  if(E.costNote) E.costNote.textContent=`List price · ${PRICE_AS_OF}`;
+  const quote=priceEvents(evs);
+  if(!quote.groups.length){
+    E.costBreak.innerHTML=`<div class="cost-empty"><span style="font-size:22px;color:var(--dim)">—</span><span>No usage rows in this range</span></div>`;
     return;
   }
-
-  const stdTok=sum(evs.filter(e=>!isErr(e.kind)&&!isPrem(e.model)),e=>e.tot);
-  const premTok=sum(evs.filter(e=>!isErr(e.kind)&&isPrem(e.model)),e=>e.tot);
-  const actualCost=sum(evs,e=>e.cost);
-  const noPlan=estimateNoPlan(evs,rates);
-  const maxBar=Math.max(noPlan,actualCost,0.01);
+  const listCost=quote.list;
+  const inferredCost=quote.inferred;
+  const actualCost=quote.actual;
+  const maxBar=Math.max(listCost,inferredCost,actualCost,0.01);
   const pctAct=Math.min(100,(actualCost/maxBar)*100);
-  const pctPlan=Math.min(100,(noPlan/maxBar)*100);
-  const stdPerM=(rates.stdRate*1e6).toFixed(2);
-  const premPerM=(rates.premRate*1e6).toFixed(2);
+  const pctPlan=Math.min(100,(listCost/maxBar)*100);
+  const pctInf=Math.min(100,(inferredCost/maxBar)*100);
+  const rows=quote.groups.map(g=>{
+    const est=g.list+g.inferred;
+    const price=g.rates?`In ${fRate(g.rates.input)} · Out ${fRate(g.rates.output)}`:(g.how==='inferred'?'Inferred rate':'No list price');
+    const who=g.pool==='Cursor'?'Cursor pool':(g.provider?`${g.provider} · Other pool`:'Unlisted');
+    const bits=[who, `${fT(g.tok)} tok`];
+    if(g.legacy) bits.push('last list price');
+    if(g.long) bits.push('long context');
+    if(g.maxMode) bits.push('Max +20%');
+    if(g.inferred>0 && g.list>0) bits.push('partially inferred');
+    else if(g.how==='inferred') bits.push('from On-Demand rows');
+    const tip=g.rates
+      ?`Input ${fRate(g.rates.input)} · Cache write ${g.rates.cacheWrite==null?'same as input':fRate(g.rates.cacheWrite)} · Cache read ${fRate(g.rates.cacheRead)} · Output ${fRate(g.rates.output)} per 1M tokens`
+      :'No matching model on the current Cursor price list';
+    const estCls=g.list>0?'':(g.inferred>0?' is-inf':'');
+    return `<div class="cost-m" data-t="${esc(tip)}">
+      <div class="cost-m-top">
+        <span class="cost-m-name">${esc(g.name)}</span>
+        <span class="cost-m-est${estCls}">${est>0?esc(f$(est)):'—'}</span>
+      </div>
+      <div class="cost-m-sub">${esc([price, ...bits].join(' · '))}</div>
+    </div>`;
+  }).join('');
 
   E.costBreak.innerHTML=`
-    <div class="cost-rate-grid">
-      <div class="cost-tile cost-tile--std">
-        <span class="cost-tile-label">Standard Models</span>
-        <span class="cost-tile-val">$${esc(stdPerM)}</span>
-        <span class="cost-tile-unit">per 1M tokens · range ${esc(fT(stdTok))}</span>
-      </div>
-      <div class="cost-tile cost-tile--prem">
-        <span class="cost-tile-label">Premium Models</span>
-        <span class="cost-tile-val">$${esc(premPerM)}</span>
-        <span class="cost-tile-unit">per 1M tokens · range ${esc(fT(premTok))}</span>
-      </div>
-    </div>
-
-    <div class="cost-sep"></div>
-
     <div class="cost-hero">
-      <div class="cost-hero-label">Current Range · No-Plan Equivalent (Estimated)</div>
-      <div class="cost-hero-num">${esc(f$(noPlan))}</div>
+      <div class="cost-hero-label">Current Range · List-Price Equivalent</div>
+      <div class="cost-hero-num">${listCost>0?esc(f$(listCost)):'—'}</div>
     </div>
-
     <div class="cost-compare">
       <div class="cost-row">
         <span class="cost-row-l">Actual Overage</span>
@@ -948,12 +1219,21 @@ function renderCostBreak(evs){
         <span class="cost-row-v">${esc(f$(actualCost))}</span>
       </div>
       <div class="cost-row">
-        <span class="cost-row-l">No-Plan Equivalent</span>
+        <span class="cost-row-l">List Price</span>
         <div class="cost-row-track"><div class="cost-row-fill cost-row-fill--plan" style="width:${pctPlan}%"></div></div>
-        <span class="cost-row-v">${esc(f$(noPlan))}</span>
+        <span class="cost-row-v">${listCost>0?esc(f$(listCost)):'—'}</span>
       </div>
+      ${inferredCost>0?`<div class="cost-row">
+        <span class="cost-row-l">Inferred</span>
+        <div class="cost-row-track"><div class="cost-row-fill cost-row-fill--inf" style="width:${pctInf}%"></div></div>
+        <span class="cost-row-v">${esc(f$(inferredCost))}</span>
+      </div>`:''}
     </div>
+    <div class="cost-sep"></div>
+    <div class="cost-models">${rows}</div>
+    <p class="cost-foot">Per 1M tokens from ${esc(PRICE_SOURCE)} as of ${esc(PRICE_AS_OF)}. Cache-write tokens use the cache-write rate, or the input rate when the model has no separate cache-write fee. Auto has no flat rate; its estimate uses that model’s own On-Demand rows. Composer 1, 1.5, and 2 use their last published rates. Teams and Enterprise add $0.25/M on third-party tokens; that fee is not included. GPT-5.6 Sol’s listed rate is promotional through Nov 21, 2026.</p>
   `;
+  bindTips(E.costBreak);
 }
 
 // ═══════════════════════════════════════
@@ -984,7 +1264,7 @@ function renderAll(){
     {name:'Output',vals:bkts.map(b=>b.out),color:'var(--purple)',fill:'var(--purple)'},
   ],bkts.map(b=>b.label));
   renderHmap(evs);
-  renderIOV(evs,bkts);
+  renderIOV(evs,min,max);
   renderModelDonut(evs);
   renderCostBreak(evs);
 }
